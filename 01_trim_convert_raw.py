@@ -40,10 +40,10 @@ if __name__ == '__main__':
     dataset = raw_dir.parts[-1].split("_")[-1].split(".")[0].zfill(3)
 
     status = "START"
-    to_print = f"{status} File:{str(index).zfill(3)}/{len(all_dirs)} Subject:{subject} Dataset:{dataset}"
+    to_print = f"{status} File:{str(index+1).zfill(3)}/{len(all_dirs)} Subject:{subject} Dataset:{dataset}"
     if subject in settings["excluded_subs"]:
         status = "EXCLUDED"
-        to_print = f"{status} File:{str(index).zfill(3)}/{len(all_dirs)} Subject:{subject} Dataset:{dataset}"
+        to_print = f"{status} File:{str(index+1).zfill(3)}/{len(all_dirs)} Subject:{subject} Dataset:{dataset}"
         print(to_print)
         quit()
     
@@ -60,30 +60,32 @@ if __name__ == '__main__':
         raw_dir, clean_names=True, verbose=False, preload=True
     )
 
-    file_info = {}
+    # not every recording has EOGs
+    try:
+        set_ch = {
+            "EEG057":"eog", 
+            "EEG058": "eog",
+            "EEG059": "eog",
+            "EEG060": "eog",
+            "UPPT001": "stim", 
+            "UPPT002": "stim"}
+        
+        raw = raw.set_channel_types(set_ch)
 
-    mcn, mcix = preprocessing.find_missing_channels(raw)
+    except:
+        set_ch = {
+            "UPPT001": "stim", 
+            "UPPT002": "stim"}
+        
+        raw = raw.set_channel_types(set_ch)
 
-    file_info["missing_channel"] = list(mcn)
-    file_info["missing_channel_ix"] = [int(i) for i in mcix]
-
-    set_ch = {
-        "EEG057":"eog", 
-        "EEG058": "eog",
-        "EEG059": "eog",
-        "EEG060": "eog",
-        "UPPT001": "stim", 
-        "UPPT002": "stim"}
-    
-    raw = raw.set_channel_types(set_ch)
-
-    events = find_events(raw, stim_channel="UPPT001")
-    key_presses = find_events(raw, stim_channel="UPPT002")
+    events = find_events(raw, stim_channel="UPPT001", shortest_event=1)
+    key_presses = find_events(raw, stim_channel="UPPT002", shortest_event=1)
 
     trigger_mapping = preprocessing.load_json(settings["trigger_mapping"])
     key_press_mapping = preprocessing.load_json(settings["key_press_mapping"])
 
-    # the down key press had a trigger 1 that would conflict with trigger 1
+    # the down key press had a value 1 that would conflict with a weird trigger 1
     key_press_mapping["7"] = "down"
     key_press_mapping.pop("1")
     key_presses[:,2][key_presses[:,2] == 1] = 7
@@ -104,26 +106,43 @@ if __name__ == '__main__':
     raw = raw.set_annotations(total_annotations)
 
     # trimming to +/- 2s around block start/break triggers
-    tmin = np.min([i["onset"] for i in raw.annotations if i["description"] == "block_start"]) - 2
-    tmax = np.max([i["onset"] for i in raw.annotations if i["description"] == "block_break"][0]) + 2
-    
+    tmin = 0.0
+    tmax = None
     try:
+        begin_annot = [i for i in raw.annotations.count().keys() if any([i == j for j in ["block_start", "experiment_start"]])]
+        end_annot = [i for i in raw.annotations.count().keys() if any([i == j for j in ["block_break", "experiment_end"]])]
+
+        if len(begin_annot) > 0:
+            begin = np.min([i["onset"] for i in raw.annotations if i["description"] == begin_annot[0]])
+            tmin = begin - 2.0
+            if tmin < 0:
+                tmin = 0.0
+        
+        if len(end_annot) > 0:
+            end = np.max([i["onset"] for i in raw.annotations if i["description"] == end_annot[0]][0])
+            tmax = end + 2.0
+            if tmax > raw.times[-1]:
+                tmax = None
+    
         raw = raw.crop(
             tmin=tmin, tmax=tmax
         )
+    
     except:
+        tmin = 0.0
+        tmax = None
+        
         raw = raw.crop(
-            tmin=0, tmax=tmax
+            tmin=tmin, tmax=tmax
         )
 
-    raw = raw.filter(None, 120.0, picks=["meg", "eeg"])
+    raw = raw.filter(None, 120.0, picks=["meg"])
 
-    preprocessing.save_dict_as_json(subject_path.joinpath(subject_file_info), file_info)
     raw.save(subject_path.joinpath(subject_raw_file), fmt="single", overwrite=True)
 
     status = "END"
     time_elapsed =  np.round((time.time() - start_time)/60, 2)
-    to_print = f"{status} File:{str(index).zfill(3)}/{len(all_dirs)} Subject:{subject} Dataset:{dataset} Time elapsed: {time_elapsed} min"
+    to_print = f"{status} File:{str(index+1).zfill(3)}/{len(all_dirs)} Subject:{subject} Dataset:{dataset} Time elapsed: {time_elapsed} min"
     print(to_print)
 
 

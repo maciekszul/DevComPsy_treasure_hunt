@@ -1,7 +1,7 @@
 {
     "dataset_path": "/home/maciek/data/treasure_hunt",
     "hi_pass_filter": 120,
-    "excluded_subs": ["901", "902"],
-    "trigger_mapping": "misc/uppt001_mapping.json",
-    "key_press_mapping": "misc/uppt002_mapping.json"
+    "excluded_subs": ["529", "901", "902"],
+    "trigger_mapping": "misc/trigger_mapping.json",
+    "key_press_mapping": "misc/key_press_mapping.json"
 }

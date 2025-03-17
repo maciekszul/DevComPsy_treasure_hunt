@@ -55,3 +55,24 @@ def update_json_file(file_path, update_dict):
             json.dump(data, json_file, indent=4, ensure_ascii=False)
     except Exception as e:
         print(f"Error updating dictionary: {e}")
+
+
+def adjust_QRS_peaks(signal, peaks, half_window, positive=True):
+    new_peaks = np.zeros(len(peaks))
+    for peak_ix, peak in enumerate(peaks):
+        start_ix = peak - half_window
+        if start_ix < 0:
+            start_ix = 0
+                    
+        end_ix = peak + half_window
+        signal_slice = signal[start_ix:end_ix]
+        
+        if positive == True:
+            slice_max_ix = np.argmax(signal_slice)
+        else:
+            slice_max_ix = np.argmin(signal_slice)
+        old_new_dist = slice_max_ix - half_window
+        new_peak = peak + old_new_dist
+        new_peaks[peak_ix] = new_peak
+    new_peaks = np.unique(new_peaks).astype(int)
+    return new_peaks
