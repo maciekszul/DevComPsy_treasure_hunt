@@ -81,7 +81,10 @@ if __name__ == '__main__':
 
     for ix, ss in enumerate(rd):
         print(raw_fif_path.name, f"{ix+1}/10")
-        data, iters = dss_line_iter(ss, fline=50.0, sfreq=raw_info["sfreq"], spot_sz=5.5, win_sz=10, nfft=1024)
+        data, iters = dss_line_iter(
+            ss, fline=50.0, sfreq=raw_info["sfreq"], 
+            spot_sz=5.5, win_sz=10, nfft=1024, n_iter_max=30
+        )
         rd_f.append(data)
     del rd
     rd_f = [np.moveaxis(i, [0,1], [1,0]) for i in rd_f]
@@ -109,25 +112,11 @@ if __name__ == '__main__':
         "freqs": freqs.astype(np.single).tolist()
     }
 
-    # EOG
-    
-    try:
-        model_eog = EOGRegression(picks="mag", picks_artifact="eog").fit(new_raw)
-        new_raw = model_eog.apply(new_raw)
-        
-        qt_path = files.make_directory(subject_path, "quality")
-        eog_file = "-".join(raw_fif_path.stem.split("-") + ["EOG_regression.jpeg"])
-        plt.ioff()
-        f, ax = plt.subplots(4, 1, figsize=(4, 8))
-        model_eog.plot(axes=ax, show=False)
-        f.savefig(qt_path.joinpath(eog_file), dpi=90)
-        plt.close("all")
+   
+    qt_path = files.make_directory(subject_path, "quality")
 
-        new_raw_path = raw_fif_path.parent.joinpath("zapline_" + raw_fif_path.name)
-        new_raw.save(new_raw_path, fmt="single", overwrite=True)
-    except:
-        pass
-
+    new_raw_path = raw_fif_path.parent.joinpath("zapline_" + raw_fif_path.name)
+    new_raw.save(new_raw_path, fmt="single", overwrite=True)
 
     # ICA
     new_raw = new_raw.filter(1,30, verbose=False)
@@ -138,22 +127,8 @@ if __name__ == '__main__':
 
     sfreq = new_raw.info["sfreq"]
 
-    results_dict = {}
-    for ica_comp in range(n_ica):
-        detector = Detectors(sfreq)
-        r_peaks = detector.swt_detector(ica_data[ica_comp])
-        pos_r_peaks = preprocessing.adjust_QRS_peaks(ica_data[ica_comp], r_peaks, 100, positive=True)
-        neg_r_peaks = preprocessing.adjust_QRS_peaks(ica_data[ica_comp], r_peaks, 100, positive=False)
-        pos_med_diff = np.median(np.diff(pos_r_peaks) / sfreq)
-        neg_med_diff = np.median(np.diff(neg_r_peaks) / sfreq)
-        results_dict[ica_comp] = [pos_r_peaks.tolist(), neg_r_peaks.tolist(), pos_med_diff, neg_med_diff]
-
     ica_filename = new_raw_path.parent.joinpath(new_raw_path.stem[:-4] + "-ica.fif")
     ica.save(ica_filename, overwrite=True, verbose=False)
-
-    json_filename = new_raw_path.parent.joinpath(new_raw_path.stem[:-4] + "-ecg_score.json")
-
-    preprocessing.save_dict_as_json(subject_path.joinpath(json_filename), results_dict)
 
     status = "END"
     time_elapsed =  np.round((time.time() - start_time)/60, 2)
